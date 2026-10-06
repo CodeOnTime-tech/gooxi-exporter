@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +23,7 @@ var (
 	listenAddr  = flag.String("listen", ":9108", "Address to listen on")
 	webPath     = flag.String("web.path", "/metrics", "Path for metrics endpoint")
 	scrapeTMO   = flag.Duration("timeout", 20*time.Second, "Timeout for a single BMC scrape")
+	logLevel    = flag.String("log.level", "info", "Log level: debug, info, warn, error")
 	showVersion = flag.Bool("version", false, "Print version and exit")
 
 	sc       = &SafeConfig{C: &Config{Modules: map[string]ModuleConfig{"default": defaultModule}}}
@@ -34,7 +37,13 @@ func main() {
 		fmt.Println("gooxi-exporter", version)
 		return
 	}
-	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	level, err := parseLogLevel(*logLevel)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "invalid --log.level:", err)
+		os.Exit(1)
+	}
+	logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 
 	if err := sc.ReloadConfig(*configFile); err != nil {
 		logger.Error("failed to load config", "error", err)
@@ -72,14 +81,45 @@ func main() {
 	mux.HandleFunc("/-/reload", reloadHandler)
 	mux.HandleFunc("/", indexHandler)
 
-	logger.Info("gooxi-exporter starting", "version", version, "listen", *listenAddr, "web_path", *webPath)
-	logFatal := func(err error) {
-		if err != nil {
+	srv := &http.Server{Addr: *listenAddr, Handler: mux}
+
+	go func() {
+		logger.Info("gooxi-exporter starting", "version", version, "listen", *listenAddr, "web_path", *webPath)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server stopped", "error", err)
 			os.Exit(1)
 		}
+	}()
+
+	// Graceful shutdown on SIGTERM/SIGINT: stop accepting new
+	// connections and let in-flight scrapes finish.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+	logger.Info("shutting down", "signal", sig.String())
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("server shutdown failed", "error", err)
 	}
-	logFatal(http.ListenAndServe(*listenAddr, mux))
+	logger.Info("server stopped")
+}
+
+// parseLogLevel maps a --log.level string to a slog.Level.
+func parseLogLevel(s string) (slog.Level, error) {
+	switch strings.ToLower(s) {
+	case "debug":
+		return slog.LevelDebug, nil
+	case "", "info":
+		return slog.LevelInfo, nil
+	case "warn", "warning":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	default:
+		return 0, fmt.Errorf("unknown level %q (want debug, info, warn, or error)", s)
+	}
 }
 
 // scrapeHandler implements the multi-target exporter pattern.
