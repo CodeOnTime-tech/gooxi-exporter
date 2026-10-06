@@ -84,6 +84,28 @@ func (c *bmcClient) login(ctx context.Context) error {
 	return nil
 }
 
+// logout closes the BMC session. Best effort: a failed logout must not
+// fail the scrape.
+func (c *bmcClient) logout(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/session", nil)
+	if err != nil {
+		return err
+	}
+	req.AddCookie(&http.Cookie{Name: "QSESSIONID", Value: c.cookie})
+	req.Header.Set("X-CSRFTOKEN", c.csrfToken)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("logout: HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func (c *bmcClient) do(ctx context.Context, path string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
@@ -224,6 +246,11 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 		c.emitUp(ch, 0)
 		return
 	}
+	defer func() {
+		if err := bmc.logout(ctx); err != nil {
+			logger.Debug("logout failed", "target", c.target, "error", err)
+		}
+	}()
 
 	// Fetch everything first, emit metrics only on full success, so a
 	// failed scrape never mixes partial data with gooxi_up 0.
