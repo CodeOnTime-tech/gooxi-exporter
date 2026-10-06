@@ -14,6 +14,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// scrapeCategory selects which metric groups a scrape produces.
+// Category endpoints let Prometheus scrape fast-changing data (sensors)
+// often and slow-changing data (chassis, uptime) less often.
+type scrapeCategory string
+
+const (
+	categoryAll     scrapeCategory = "all"
+	categorySensors scrapeCategory = "sensors"
+	categoryHealth  scrapeCategory = "health"
+)
+
 // --- BMC API Client (per-scrape, no shared state) ---
 
 type bmcClient struct {
@@ -166,9 +177,10 @@ type uptimeResponse struct {
 // --- Prometheus Collector ---
 
 type gooxiCollector struct {
-	target string
-	module string
-	config *SafeConfig
+	target   string
+	module   string
+	category scrapeCategory
+	config   *SafeConfig
 
 	descUp             *prometheus.Desc
 	descScrapeDuration *prometheus.Desc
@@ -178,11 +190,12 @@ type gooxiCollector struct {
 	descUptime         *prometheus.Desc
 }
 
-func newGooxiCollector(target, module string, config *SafeConfig) *gooxiCollector {
+func newGooxiCollector(target, module string, category scrapeCategory, config *SafeConfig) *gooxiCollector {
 	return &gooxiCollector{
-		target: target,
-		module: module,
-		config: config,
+		target:   target,
+		module:   module,
+		category: category,
+		config:   config,
 		descUp: prometheus.NewDesc(
 			"gooxi_up",
 			"Whether the last scrape of the Gooxi BMC was successful.",
@@ -260,51 +273,59 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 		uptime  uptimeResponse
 	)
 
-	if sensorData, err := bmc.do(ctx, "/api/sensors"); err != nil {
-		logger.Error("fetch sensors failed", "target", c.target, "error", err)
-		c.emitUp(ch, 0)
-		return
-	} else if err := json.Unmarshal(sensorData, &sensors); err != nil {
-		logger.Error("parse sensors failed", "target", c.target, "error", err)
-		c.emitUp(ch, 0)
-		return
+	if c.category == categoryAll || c.category == categorySensors {
+		if sensorData, err := bmc.do(ctx, "/api/sensors"); err != nil {
+			logger.Error("fetch sensors failed", "target", c.target, "error", err)
+			c.emitUp(ch, 0)
+			return
+		} else if err := json.Unmarshal(sensorData, &sensors); err != nil {
+			logger.Error("parse sensors failed", "target", c.target, "error", err)
+			c.emitUp(ch, 0)
+			return
+		}
 	}
 
-	if chassisData, err := bmc.do(ctx, "/api/chassis-status"); err != nil {
-		logger.Error("fetch chassis failed", "target", c.target, "error", err)
-		c.emitUp(ch, 0)
-		return
-	} else if err := json.Unmarshal(chassisData, &chassis); err != nil {
-		logger.Error("parse chassis failed", "target", c.target, "error", err)
-		c.emitUp(ch, 0)
-		return
+	if c.category == categoryAll || c.category == categoryHealth {
+		if chassisData, err := bmc.do(ctx, "/api/chassis-status"); err != nil {
+			logger.Error("fetch chassis failed", "target", c.target, "error", err)
+			c.emitUp(ch, 0)
+			return
+		} else if err := json.Unmarshal(chassisData, &chassis); err != nil {
+			logger.Error("parse chassis failed", "target", c.target, "error", err)
+			c.emitUp(ch, 0)
+			return
+		}
+
+		if uptimeData, err := bmc.do(ctx, "/api/status/uptime"); err != nil {
+			logger.Error("fetch uptime failed", "target", c.target, "error", err)
+			c.emitUp(ch, 0)
+			return
+		} else if err := json.Unmarshal(uptimeData, &uptime); err != nil {
+			logger.Error("parse uptime failed", "target", c.target, "error", err)
+			c.emitUp(ch, 0)
+			return
+		}
 	}
 
-	if uptimeData, err := bmc.do(ctx, "/api/status/uptime"); err != nil {
-		logger.Error("fetch uptime failed", "target", c.target, "error", err)
-		c.emitUp(ch, 0)
-		return
-	} else if err := json.Unmarshal(uptimeData, &uptime); err != nil {
-		logger.Error("parse uptime failed", "target", c.target, "error", err)
-		c.emitUp(ch, 0)
-		return
+	if c.category == categoryAll || c.category == categorySensors {
+		for _, s := range sensors {
+			ch <- prometheus.MustNewConstMetric(
+				c.descSensorValue, prometheus.GaugeValue,
+				s.Reading, s.Name, s.Type, s.Unit,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				c.descSensorState, prometheus.GaugeValue,
+				float64(s.SensorState), s.Name, s.Type,
+			)
+		}
 	}
 
-	for _, s := range sensors {
-		ch <- prometheus.MustNewConstMetric(
-			c.descSensorValue, prometheus.GaugeValue,
-			s.Reading, s.Name, s.Type, s.Unit,
-		)
-		ch <- prometheus.MustNewConstMetric(
-			c.descSensorState, prometheus.GaugeValue,
-			float64(s.SensorState), s.Name, s.Type,
-		)
+	if c.category == categoryAll || c.category == categoryHealth {
+		ch <- prometheus.MustNewConstMetric(c.descChassisPower, prometheus.GaugeValue, float64(chassis.PowerStatus))
+
+		uptimeSeconds := float64(uptime.POHCounterReading) * float64(uptime.MinutesPerCount) * 60
+		ch <- prometheus.MustNewConstMetric(c.descUptime, prometheus.GaugeValue, uptimeSeconds)
 	}
-
-	ch <- prometheus.MustNewConstMetric(c.descChassisPower, prometheus.GaugeValue, float64(chassis.PowerStatus))
-
-	uptimeSeconds := float64(uptime.POHCounterReading) * float64(uptime.MinutesPerCount) * 60
-	ch <- prometheus.MustNewConstMetric(c.descUptime, prometheus.GaugeValue, uptimeSeconds)
 
 	c.emitUp(ch, 1)
 }
