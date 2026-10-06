@@ -14,9 +14,12 @@ import (
 )
 
 var (
-	configFile = flag.String("config.file", "", "Path to configuration file (YAML)")
-	listenAddr = flag.String("listen", ":9108", "Address to listen on")
-	webPath    = flag.String("web.path", "/metrics", "Path for metrics endpoint")
+	version = "1.0.0"
+
+	configFile  = flag.String("config.file", "", "Path to configuration file (YAML)")
+	listenAddr  = flag.String("listen", ":9108", "Address to listen on")
+	webPath     = flag.String("web.path", "/metrics", "Path for metrics endpoint")
+	showVersion = flag.Bool("version", false, "Print version and exit")
 
 	sc       = &SafeConfig{C: &Config{Modules: map[string]ModuleConfig{"default": defaultModule}}}
 	reloadCh chan chan error
@@ -25,6 +28,10 @@ var (
 
 func main() {
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("gooxi-exporter", version)
+		return
+	}
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	if err := sc.ReloadConfig(*configFile); err != nil {
@@ -61,7 +68,7 @@ func main() {
 	mux.HandleFunc("/-/reload", reloadHandler)
 	mux.HandleFunc("/", indexHandler)
 
-	logger.Info("gooxi-exporter starting", "listen", *listenAddr, "bmc_path", *webPath)
+	logger.Info("gooxi-exporter starting", "version", version, "listen", *listenAddr, "web_path", *webPath)
 	logFatal := func(err error) {
 		if err != nil {
 			logger.Error("server stopped", "error", err)

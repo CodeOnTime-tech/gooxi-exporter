@@ -12,7 +12,9 @@ A single exporter instance collects metrics from **many BMCs** (multi-target pat
 
 The binary is a single static file (built with `CGO_ENABLED=0`) and runs on any x86_64 Linux with no dependencies.
 
-Build from source (requires Go 1.23+):
+Prebuilt binaries are available in the [GitHub Releases](https://github.com/CodeOnTime-tech/gooxi-exporter/releases).
+
+Or build from source (requires Go 1.23+):
 
 ```bash
 make build
@@ -219,6 +221,7 @@ curl -X POST http://localhost:9108/-/reload
 | `--config.file` | — | Path to the YAML config file |
 | `--listen` | `:9108` | Listen address |
 | `--web.path` | `/metrics` | Metrics endpoint path |
+| `--version` | — | Print version and exit |
 
 ## How It Works
 
