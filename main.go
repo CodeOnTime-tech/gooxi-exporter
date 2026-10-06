@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	version = "1.0.0"
+	version = "1.1.0"
 
 	configFile  = flag.String("config.file", "", "Path to configuration file (YAML)")
 	listenAddr  = flag.String("listen", ":9108", "Address to listen on")
