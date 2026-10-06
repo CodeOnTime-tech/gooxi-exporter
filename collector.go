@@ -220,23 +220,46 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 	bmc := newBMCClient(baseURL, mod.Username, mod.Password, mod.Insecure)
 
 	if err := bmc.login(ctx); err != nil {
-		logger.Error("login failed", "target", c.target, "error", err)
-		ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, 0)
+		logger.Error("login failed", "target", c.target, "module", c.module, "error", err)
+		c.emitUp(ch, 0)
 		return
 	}
 
-	// Sensors
-	sensorData, err := bmc.do(ctx, "/api/sensors")
-	if err != nil {
+	// Fetch everything first, emit metrics only on full success, so a
+	// failed scrape never mixes partial data with gooxi_up 0.
+	var (
+		sensors []sensor
+		chassis chassisStatus
+		uptime  uptimeResponse
+	)
+
+	if sensorData, err := bmc.do(ctx, "/api/sensors"); err != nil {
 		logger.Error("fetch sensors failed", "target", c.target, "error", err)
-		ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, 0)
+		c.emitUp(ch, 0)
+		return
+	} else if err := json.Unmarshal(sensorData, &sensors); err != nil {
+		logger.Error("parse sensors failed", "target", c.target, "error", err)
+		c.emitUp(ch, 0)
 		return
 	}
 
-	var sensors []sensor
-	if err := json.Unmarshal(sensorData, &sensors); err != nil {
-		logger.Error("parse sensors failed", "target", c.target, "error", err)
-		ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, 0)
+	if chassisData, err := bmc.do(ctx, "/api/chassis-status"); err != nil {
+		logger.Error("fetch chassis failed", "target", c.target, "error", err)
+		c.emitUp(ch, 0)
+		return
+	} else if err := json.Unmarshal(chassisData, &chassis); err != nil {
+		logger.Error("parse chassis failed", "target", c.target, "error", err)
+		c.emitUp(ch, 0)
+		return
+	}
+
+	if uptimeData, err := bmc.do(ctx, "/api/status/uptime"); err != nil {
+		logger.Error("fetch uptime failed", "target", c.target, "error", err)
+		c.emitUp(ch, 0)
+		return
+	} else if err := json.Unmarshal(uptimeData, &uptime); err != nil {
+		logger.Error("parse uptime failed", "target", c.target, "error", err)
+		c.emitUp(ch, 0)
 		return
 	}
 
@@ -251,36 +274,14 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 	}
 
-	// Chassis status
-	chassisData, err := bmc.do(ctx, "/api/chassis-status")
-	if err != nil {
-		logger.Error("fetch chassis failed", "target", c.target, "error", err)
-		ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, 0)
-		return
-	}
-	var chassis chassisStatus
-	if err := json.Unmarshal(chassisData, &chassis); err != nil {
-		logger.Error("parse chassis failed", "target", c.target, "error", err)
-		ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, 0)
-		return
-	}
 	ch <- prometheus.MustNewConstMetric(c.descChassisPower, prometheus.GaugeValue, float64(chassis.PowerStatus))
 
-	// Uptime
-	uptimeData, err := bmc.do(ctx, "/api/status/uptime")
-	if err != nil {
-		logger.Error("fetch uptime failed", "target", c.target, "error", err)
-		ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, 0)
-		return
-	}
-	var up uptimeResponse
-	if err := json.Unmarshal(uptimeData, &up); err != nil {
-		logger.Error("parse uptime failed", "target", c.target, "error", err)
-		ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, 0)
-		return
-	}
-	uptimeSeconds := float64(up.POHCounterReading) * float64(up.MinutesPerCount) * 60
+	uptimeSeconds := float64(uptime.POHCounterReading) * float64(uptime.MinutesPerCount) * 60
 	ch <- prometheus.MustNewConstMetric(c.descUptime, prometheus.GaugeValue, uptimeSeconds)
 
-	ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, 1)
+	c.emitUp(ch, 1)
+}
+
+func (c *gooxiCollector) emitUp(ch chan<- prometheus.Metric, up float64) {
+	ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, up)
 }
