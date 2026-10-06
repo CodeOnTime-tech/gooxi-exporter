@@ -1,0 +1,21 @@
+[Unit]
+Description=Gooxi BMC Prometheus exporter
+Documentation=https://github.com/CodeOnTime/gooxi-exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=gooxi
+Group=gooxi
+ExecStart=/opt/gooxi/gooxi-exporter --config.file=/etc/gooxi/config.yml --listen=:9108
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
