@@ -1,0 +1,18 @@
+# Gooxi BMC Exporter configuration
+#
+# Defines credential groups ("modules") for BMCs.
+# The "default" module is used when no specific module is requested.
+#
+# Prometheus passes the module via ?module=<name> query parameter.
+
+modules:
+  default:
+    username: admin
+    password: admin
+    insecure: true
+
+  # Example: a group with different credentials
+  # production:
+  #   username: monitor
+  #   password: s3cret
+  #   insecure: true
