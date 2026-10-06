@@ -37,7 +37,7 @@ type bmcClient struct {
 	csrfToken string
 }
 
-func newBMCClient(baseURL, username, password string, insecure bool) *bmcClient {
+func newBMCClient(baseURL, username, password string, insecure bool, timeout time.Duration) *bmcClient {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
 	}
@@ -45,7 +45,7 @@ func newBMCClient(baseURL, username, password string, insecure bool) *bmcClient 
 		baseURL:  baseURL,
 		username: username,
 		password: password,
-		client:   &http.Client{Timeout: 15 * time.Second, Transport: transport},
+		client:   &http.Client{Timeout: timeout, Transport: transport},
 	}
 }
 
@@ -181,6 +181,7 @@ type gooxiCollector struct {
 	module   string
 	category scrapeCategory
 	config   *SafeConfig
+	timeout  time.Duration
 
 	descUp             *prometheus.Desc
 	descScrapeDuration *prometheus.Desc
@@ -190,13 +191,14 @@ type gooxiCollector struct {
 	descUptime         *prometheus.Desc
 }
 
-func newGooxiCollector(target, module string, category scrapeCategory, config *SafeConfig) *gooxiCollector {
+func newGooxiCollector(target, module string, category scrapeCategory, config *SafeConfig, timeout time.Duration) *gooxiCollector {
 	host := []string{"host"}
 	return &gooxiCollector{
 		target:   target,
 		module:   module,
 		category: category,
 		config:   config,
+		timeout:  timeout,
 		descUp: prometheus.NewDesc(
 			"gooxi_up",
 			"Whether the last scrape of the Gooxi BMC was successful.",
@@ -241,7 +243,7 @@ func (c *gooxiCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 	start := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
 	defer func() {
@@ -253,7 +255,7 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 
 	mod := c.config.ModuleFor(c.module)
 	baseURL := fmt.Sprintf("https://%s", c.target)
-	bmc := newBMCClient(baseURL, mod.Username, mod.Password, mod.Insecure)
+	bmc := newBMCClient(baseURL, mod.Username, mod.Password, mod.Insecure, c.timeout)
 
 	if err := bmc.login(ctx); err != nil {
 		logger.Error("login failed", "target", c.target, "module", c.module, "error", err)

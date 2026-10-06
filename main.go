@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -19,6 +20,7 @@ var (
 	configFile  = flag.String("config.file", "", "Path to configuration file (YAML)")
 	listenAddr  = flag.String("listen", ":9108", "Address to listen on")
 	webPath     = flag.String("web.path", "/metrics", "Path for metrics endpoint")
+	scrapeTMO   = flag.Duration("timeout", 20*time.Second, "Timeout for a single BMC scrape")
 	showVersion = flag.Bool("version", false, "Print version and exit")
 
 	sc       = &SafeConfig{C: &Config{Modules: map[string]ModuleConfig{"default": defaultModule}}}
@@ -99,7 +101,7 @@ func scrapeHandler(category scrapeCategory) http.HandlerFunc {
 		logger.Debug("scrape", "target", target, "module", module, "category", string(category))
 
 		registry := prometheus.NewRegistry()
-		collector := newGooxiCollector(target, module, category, sc)
+		collector := newGooxiCollector(target, module, category, sc, *scrapeTMO)
 		registry.MustRegister(collector)
 
 		promhttp.HandlerFor(registry, promhttp.HandlerOpts{}).ServeHTTP(w, r)
