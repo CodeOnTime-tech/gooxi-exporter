@@ -257,6 +257,16 @@ All metrics carry a `host` label with the target address.
 | `gooxi_uptime_seconds{host}` | System uptime from the BMC POH counter |
 | `gooxi_exporter_build_info{version}` | Exporter build information |
 
+## Grafana Dashboard
+
+A ready-made dashboard lives in [`grafana/`](grafana/) as Jsonnet (Grafana schema v2) and is generated into `grafana/gooxi.json`:
+
+```bash
+npm run dashboards   # generate + validate (project rules + Grafana OpenAPI schema) + tests
+```
+
+Import `grafana/gooxi.json` in Grafana (Dashboards → New → Import). The dashboard covers fleet reachability (`gooxi_up`), chassis power, uptime, scrape duration, per-type sensor readings, and sensor warning/critical states. It provides `Host` and `Sensor` variables for filtering BMCs and individual sensors.
+
 ## Configuration File
 
 ```yaml

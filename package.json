@@ -1,0 +1,19 @@
+{
+  "name": "gooxi-exporter-dashboards",
+  "version": "1.0.0",
+  "description": "Grafana dashboards for gooxi-exporter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dashboard:generate": "node grafana/scripts/generate-dashboard.mjs",
+    "dashboard:validate": "node grafana/scripts/validate-dashboard.mjs",
+    "dashboard:test": "node --test grafana/scripts/dashboard.test.mjs",
+    "dashboards": "npm run dashboard:generate && npm run dashboard:validate && npm run dashboard:test"
+  },
+  "devDependencies": {
+    "@grafana/openapi": "13.1.0",
+    "@hanazuki/node-jsonnet": "3.3.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  }
+}
