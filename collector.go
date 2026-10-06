@@ -191,6 +191,7 @@ type gooxiCollector struct {
 }
 
 func newGooxiCollector(target, module string, category scrapeCategory, config *SafeConfig) *gooxiCollector {
+	host := []string{"host"}
 	return &gooxiCollector{
 		target:   target,
 		module:   module,
@@ -199,32 +200,32 @@ func newGooxiCollector(target, module string, category scrapeCategory, config *S
 		descUp: prometheus.NewDesc(
 			"gooxi_up",
 			"Whether the last scrape of the Gooxi BMC was successful.",
-			nil, nil,
+			host, nil,
 		),
 		descScrapeDuration: prometheus.NewDesc(
 			"gooxi_scrape_duration_seconds",
 			"Duration of the last Gooxi BMC scrape in seconds.",
-			nil, nil,
+			host, nil,
 		),
 		descSensorValue: prometheus.NewDesc(
 			"gooxi_sensor_value",
 			"Sensor reading value from Gooxi BMC.",
-			[]string{"name", "type", "unit"}, nil,
+			append(host, "name", "type", "unit"), nil,
 		),
 		descSensorState: prometheus.NewDesc(
 			"gooxi_sensor_state",
 			"Sensor state from Gooxi BMC (1=normal, 2=warning, 3=critical).",
-			[]string{"name", "type"}, nil,
+			append(host, "name", "type"), nil,
 		),
 		descChassisPower: prometheus.NewDesc(
 			"gooxi_chassis_power_on",
 			"Chassis power state (1=on, 0=off).",
-			nil, nil,
+			host, nil,
 		),
 		descUptime: prometheus.NewDesc(
 			"gooxi_uptime_seconds",
 			"System uptime in seconds (from BMC POH counter).",
-			nil, nil,
+			host, nil,
 		),
 	}
 }
@@ -246,7 +247,7 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 	defer func() {
 		ch <- prometheus.MustNewConstMetric(
 			c.descScrapeDuration, prometheus.GaugeValue,
-			time.Since(start).Seconds(),
+			time.Since(start).Seconds(), c.target,
 		)
 	}()
 
@@ -311,25 +312,25 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 		for _, s := range sensors {
 			ch <- prometheus.MustNewConstMetric(
 				c.descSensorValue, prometheus.GaugeValue,
-				s.Reading, s.Name, s.Type, s.Unit,
+				s.Reading, c.target, s.Name, s.Type, s.Unit,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.descSensorState, prometheus.GaugeValue,
-				float64(s.SensorState), s.Name, s.Type,
+				float64(s.SensorState), c.target, s.Name, s.Type,
 			)
 		}
 	}
 
 	if c.category == categoryAll || c.category == categoryHealth {
-		ch <- prometheus.MustNewConstMetric(c.descChassisPower, prometheus.GaugeValue, float64(chassis.PowerStatus))
+		ch <- prometheus.MustNewConstMetric(c.descChassisPower, prometheus.GaugeValue, float64(chassis.PowerStatus), c.target)
 
 		uptimeSeconds := float64(uptime.POHCounterReading) * float64(uptime.MinutesPerCount) * 60
-		ch <- prometheus.MustNewConstMetric(c.descUptime, prometheus.GaugeValue, uptimeSeconds)
+		ch <- prometheus.MustNewConstMetric(c.descUptime, prometheus.GaugeValue, uptimeSeconds, c.target)
 	}
 
 	c.emitUp(ch, 1)
 }
 
 func (c *gooxiCollector) emitUp(ch chan<- prometheus.Metric, up float64) {
-	ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, up)
+	ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, up, c.target)
 }
