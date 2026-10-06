@@ -5,6 +5,16 @@
 #
 # Prometheus passes the module via ?module=<name> query parameter.
 
+# Optional: expose these hosts on /discover for Prometheus http_sd.
+targets:
+  - 192.168.0.167
+  - 192.168.0.168
+
+# Optional: select a credential module per target.
+# Used when ?module= is not provided, and exposed as a label in /discover.
+host_modules:
+  192.168.0.168: production
+
 modules:
   default:
     username: admin
@@ -12,7 +22,7 @@ modules:
     insecure: true
 
   # Example: a group with different credentials
-  # production:
-  #   username: monitor
-  #   password: s3cret
-  #   insecure: true
+  production:
+    username: monitor
+    password: s3cret
+    insecure: true

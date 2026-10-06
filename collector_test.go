@@ -315,3 +315,26 @@ func TestCollectSensorsFailureNoPartialMetrics(t *testing.T) {
 		t.Errorf("chassis samples = %d, want 0 on failed scrape", n)
 	}
 }
+
+func TestCollectHostModuleMapping(t *testing.T) {
+	mock := newMockBMC(t)
+	mock.username = "monitor"
+	mock.password = "s3cret"
+
+	cfg := &SafeConfig{C: &Config{
+		Modules: map[string]ModuleConfig{
+			"default": {Username: "admin", Password: "admin", Insecure: true},
+			"prod":    {Username: "monitor", Password: "s3cret", Insecure: true},
+		},
+		HostModules: map[string]string{
+			mock.target(): "prod",
+		},
+	}}
+
+	c := newGooxiCollector(mock.target(), "default", categoryAll, cfg, 10*time.Second)
+	mfs := gather(t, c)
+
+	if v := gaugeValue(t, family(mfs, "gooxi_up")); v != 1 {
+		t.Errorf("gooxi_up = %v, want 1 (host_modules mapping should select 'prod')", v)
+	}
+}

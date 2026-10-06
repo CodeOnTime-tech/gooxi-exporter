@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 
@@ -11,7 +12,9 @@ import (
 
 // Config is the top-level configuration file structure.
 type Config struct {
-	Modules map[string]ModuleConfig `yaml:"modules"`
+	Targets     []string                `yaml:"targets"`
+	HostModules map[string]string       `yaml:"host_modules"`
+	Modules     map[string]ModuleConfig `yaml:"modules"`
 
 	XXX map[string]any `yaml:",inline"`
 }
@@ -102,4 +105,78 @@ func (sc *SafeConfig) ModuleFor(module string) ModuleConfig {
 		}
 	}
 	return sc.C.Modules["default"]
+}
+
+// ModuleForTarget resolves the credential module for a scrape target.
+// An explicit non-default module wins; otherwise a host_modules mapping is
+// used; otherwise the default module is returned.
+func (sc *SafeConfig) ModuleForTarget(target, requested string) ModuleConfig {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	if requested != "" && requested != "default" {
+		if m, ok := sc.C.Modules[requested]; ok {
+			return m
+		}
+		return sc.C.Modules["default"]
+	}
+
+	if m, ok := sc.C.HostModules[target]; ok && m != "" {
+		if mod, ok := sc.C.Modules[m]; ok {
+			return mod
+		}
+	}
+
+	return sc.C.Modules["default"]
+}
+
+// discoverItem is one entry of the /discover JSON response.
+type discoverItem struct {
+	Targets []string          `json:"targets"`
+	Labels  map[string]string `json:"labels,omitempty"`
+}
+
+// DiscoverItems returns the sorted unique list of targets advertised on
+// /discover. The list is the union of the top-level targets and the
+// host_modules keys.
+func (sc *SafeConfig) DiscoverItems() []discoverItem {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	hostModule := make(map[string]string)
+	for _, host := range sc.C.Targets {
+		if host == "" {
+			continue
+		}
+		if _, exists := hostModule[host]; !exists {
+			hostModule[host] = ""
+		}
+	}
+	for host, module := range sc.C.HostModules {
+		if host == "" {
+			continue
+		}
+		if _, exists := hostModule[host]; !exists {
+			hostModule[host] = ""
+		}
+		if module != "" && module != "default" {
+			hostModule[host] = module
+		}
+	}
+
+	hosts := make([]string, 0, len(hostModule))
+	for host := range hostModule {
+		hosts = append(hosts, host)
+	}
+	sort.Strings(hosts)
+
+	items := make([]discoverItem, 0, len(hosts))
+	for _, host := range hosts {
+		item := discoverItem{Targets: []string{host}}
+		if module := hostModule[host]; module != "" {
+			item.Labels = map[string]string{"module": module}
+		}
+		items = append(items, item)
+	}
+	return items
 }

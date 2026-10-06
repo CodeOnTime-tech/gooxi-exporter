@@ -253,7 +253,7 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 	}()
 
-	mod := c.config.ModuleFor(c.module)
+	mod := c.config.ModuleForTarget(c.target, c.module)
 	baseURL := fmt.Sprintf("https://%s", c.target)
 	bmc := newBMCClient(baseURL, mod.Username, mod.Password, mod.Insecure, c.timeout)
 
@@ -335,4 +335,24 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 
 func (c *gooxiCollector) emitUp(ch chan<- prometheus.Metric, up float64) {
 	ch <- prometheus.MustNewConstMetric(c.descUp, prometheus.GaugeValue, up, c.target)
+}
+
+// --- Exporter build information ---
+
+var descBuildInfo = prometheus.NewDesc(
+	"gooxi_exporter_build_info",
+	"Build information for gooxi-exporter.",
+	[]string{"version"}, nil,
+)
+
+type buildInfoCollector struct {
+	version string
+}
+
+func (c buildInfoCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- descBuildInfo
+}
+
+func (c buildInfoCollector) Collect(ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(descBuildInfo, prometheus.GaugeValue, 1, c.version)
 }

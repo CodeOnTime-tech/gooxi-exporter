@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -74,13 +76,12 @@ func main() {
 		}
 	}()
 
-	mux := http.NewServeMux()
-	mux.Handle(*webPath, scrapeHandler(categoryAll))
-	mux.Handle(*webPath+"/sensors", scrapeHandler(categorySensors))
-	mux.Handle(*webPath+"/health", scrapeHandler(categoryHealth))
-	mux.HandleFunc("/-/reload", reloadHandler)
-	mux.HandleFunc("/", indexHandler)
+	if err := validateWebPath(*webPath); err != nil {
+		logger.Error("invalid --web.path", "error", err)
+		os.Exit(1)
+	}
 
+	mux := newMux(*webPath)
 	srv := &http.Server{Addr: *listenAddr, Handler: mux}
 
 	go func() {
@@ -143,6 +144,7 @@ func scrapeHandler(category scrapeCategory) http.HandlerFunc {
 		registry := prometheus.NewRegistry()
 		collector := newGooxiCollector(target, module, category, sc, *scrapeTMO)
 		registry.MustRegister(collector)
+		registry.MustRegister(buildInfoCollector{version: version})
 
 		promhttp.HandlerFor(registry, promhttp.HandlerOpts{}).ServeHTTP(w, r)
 	}
@@ -160,20 +162,61 @@ func reloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func indexHandler(w http.ResponseWriter, _ *http.Request) {
+// newMux builds the HTTP routing table for the exporter.
+func newMux(webPath string) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.Handle(webPath, scrapeHandler(categoryAll))
+	mux.Handle(webPath+"/sensors", scrapeHandler(categorySensors))
+	mux.Handle(webPath+"/health", scrapeHandler(categoryHealth))
+	mux.HandleFunc("/discover", discoverHandler)
+	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/-/reload", reloadHandler)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		indexHandler(w, r, webPath)
+	})
+	return mux
+}
+
+// validateWebPath rejects values that would collide with the reserved
+// exporter endpoints.
+func validateWebPath(webPath string) error {
+	if !strings.HasPrefix(webPath, "/") {
+		return fmt.Errorf("web path must start with '/': %q", webPath)
+	}
+	switch path.Clean(webPath) {
+	case "/", "/health", "/discover", "/-/reload":
+		return fmt.Errorf("web path %q collides with a reserved endpoint", webPath)
+	}
+	return nil
+}
+
+func discoverHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sc.DiscoverItems())
+}
+
+func healthHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprint(w, "ok")
+}
+
+func indexHandler(w http.ResponseWriter, _ *http.Request, webPath string) {
 	fmt.Fprintf(w, `<html><head><title>Gooxi Exporter</title></head>
 <body>
 <h1>Gooxi BMC Exporter</h1>
+<p>Version: %s</p>
 <p>Endpoints:</p>
 <ul>
   <li><code>%s?target=&lt;host&gt;</code> — all metrics</li>
   <li><code>%s/sensors?target=&lt;host&gt;</code> — sensor readings only</li>
   <li><code>%s/health?target=&lt;host&gt;</code> — chassis power and uptime</li>
+  <li><code>/discover</code> — target list for Prometheus http_sd</li>
+  <li><code>/health</code> — exporter liveness</li>
 </ul>
 <form action="%s">
   <label>Target BMC:</label> <input type="text" name="target" placeholder="192.168.0.1"><br>
   <label>Module:</label> <input type="text" name="module" value="default"><br>
   <input type="submit" value="Scrape">
 </form>
-</body></html>`, *webPath, *webPath, *webPath, *webPath)
+</body></html>`, version, webPath, webPath, webPath, webPath)
 }

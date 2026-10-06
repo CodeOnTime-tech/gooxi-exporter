@@ -143,6 +143,42 @@ scrape_configs:
         replacement: 10.0.0.10:9108
 ```
 
+#### Dynamic target list — http_sd
+
+The exporter can serve the BMC list directly from `/discover`:
+
+`/etc/gooxi/config.yml`:
+
+```yaml
+targets:
+  - 192.168.0.167
+  - 192.168.0.168
+
+host_modules:
+  192.168.0.168: production
+```
+
+`prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: gooxi
+    metrics_path: /metrics
+    http_sd_configs:
+      - url: http://10.0.0.10:9108/discover
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__meta_http_sd_module]
+        target_label: __param_module
+      - target_label: __address__
+        replacement: 10.0.0.10:9108
+```
+
+`10.0.0.10:9108` is the address of the machine running the exporter. The optional `module` label from `/discover` is passed to the exporter as `?module=`.
+
 #### Different credentials per group — modules
 
 Declare modules in the exporter config (see below) and pass them via `params.module` in Prometheus:
@@ -180,13 +216,17 @@ scrape_configs:
 
 ## Endpoints
 
-| Endpoint | Metrics |
+| Endpoint | Purpose |
 |----------|---------|
 | `/metrics?target=<host>` | Everything (backward compatible) |
 | `/metrics/sensors?target=<host>` | Sensor readings and states only |
-| `/metrics/health?target=<host>` | Chassis power and uptime only |
+| `/metrics/health?target=<host>` | BMC chassis power and uptime only |
+| `/discover` | JSON target list for Prometheus `http_sd_configs` |
+| `/health` | Exporter liveness probe |
 
-All endpoints also accept `&module=<name>` to select a credential group.
+All scrape endpoints also accept `&module=<name>` to select a credential group.
+
+Note: `/health` reports the exporter process, while `/metrics/health` reports BMC chassis health.
 
 Scrape the fast-changing sensor data often and the slow-changing health data less often:
 
@@ -215,10 +255,21 @@ All metrics carry a `host` label with the target address.
 | `gooxi_sensor_state{host,name,type}` | Sensor state (1=normal, 2=warning, 3=critical) |
 | `gooxi_chassis_power_on{host}` | Chassis power state (0/1) |
 | `gooxi_uptime_seconds{host}` | System uptime from the BMC POH counter |
+| `gooxi_exporter_build_info{version}` | Exporter build information |
 
 ## Configuration File
 
 ```yaml
+# Optional: expose these hosts on /discover for Prometheus http_sd.
+targets:
+  - 192.168.0.167
+  - 192.168.0.168
+
+# Optional: select a credential module per target.
+# Used when ?module= is not provided, and exposed as a label in /discover.
+host_modules:
+  192.168.0.168: production
+
 modules:
   default:            # used when ?module= is not passed
     username: admin
@@ -232,6 +283,8 @@ modules:
 ```
 
 - The module is selected by the `?module=<name>` parameter; the default is `default`.
+- If `?module=` is absent or `default`, a `host_modules` mapping for the target is used when present.
+- `/discover` returns the sorted unique union of `targets` and `host_modules` keys.
 - If `default` is not declared, `admin/admin` is substituted automatically.
 - The config is picked up on the fly, without a restart:
 
@@ -247,7 +300,7 @@ curl -X POST http://localhost:9108/-/reload
 |------|---------|-------------|
 | `--config.file` | — | Path to the YAML config file |
 | `--listen` | `:9108` | Listen address |
-| `--web.path` | `/metrics` | Metrics endpoint path (category endpoints are `<path>/sensors` and `<path>/health`) |
+| `--web.path` | `/metrics` | Metrics endpoint path (category endpoints are `<path>/sensors` and `<path>/health`; must not collide with `/health`, `/discover`, or `/-/reload`) |
 | `--timeout` | `20s` | Timeout for a single BMC scrape |
 | `--log.level` | `info` | Log level: debug, info, warn, error |
 | `--version` | — | Print version and exit |
