@@ -20,13 +20,13 @@ fmt: ## Format Go source files
 vet: ## Run static analysis
 	go vet ./...
 
-test: ## Run all tests
-	go test ./...
+test: ## Run all tests (with race detector)
+	go test -race ./...
 
 cover: ## Run tests with a coverage report
 	go test -coverprofile=.coverage ./...
 
-run: ## Run the exporter (needs --bmc.host, --bmc.username, --bmc.password)
+run: ## Run the exporter (e.g. go run . --config.file=config.example.yml)
 	go run .
 
 discovery: ## Discover Gooxi BMCs in a subnet (override: SUBNET=10.0.1.0/24)

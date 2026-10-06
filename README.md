@@ -178,16 +178,43 @@ scrape_configs:
         replacement: 10.0.0.10:9108
 ```
 
+## Endpoints
+
+| Endpoint | Metrics |
+|----------|---------|
+| `/metrics?target=<host>` | Everything (backward compatible) |
+| `/metrics/sensors?target=<host>` | Sensor readings and states only |
+| `/metrics/health?target=<host>` | Chassis power and uptime only |
+
+All endpoints also accept `&module=<name>` to select a credential group.
+
+Scrape the fast-changing sensor data often and the slow-changing health data less often:
+
+```yaml
+scrape_configs:
+  - job_name: gooxi-sensors
+    metrics_path: /metrics/sensors
+    scrape_interval: 15s
+    # ...targets and relabeling as below
+
+  - job_name: gooxi-health
+    metrics_path: /metrics/health
+    scrape_interval: 5m
+    # ...same targets
+```
+
 ## Metrics
+
+All metrics carry a `host` label with the target address.
 
 | Metric | Description |
 |--------|-------------|
-| `gooxi_up` | Last scrape success (0/1) |
-| `gooxi_scrape_duration_seconds` | Last scrape duration |
-| `gooxi_sensor_value{name,type,unit}` | Sensor reading (51 sensors) |
-| `gooxi_sensor_state{name,type}` | Sensor state (1=normal, 2=warning, 3=critical) |
-| `gooxi_chassis_power_on` | Chassis power state (0/1) |
-| `gooxi_uptime_seconds` | System uptime from the BMC POH counter |
+| `gooxi_up{host}` | Last scrape success (0/1) |
+| `gooxi_scrape_duration_seconds{host}` | Last scrape duration |
+| `gooxi_sensor_value{host,name,type,unit}` | Sensor reading (51 sensors) |
+| `gooxi_sensor_state{host,name,type}` | Sensor state (1=normal, 2=warning, 3=critical) |
+| `gooxi_chassis_power_on{host}` | Chassis power state (0/1) |
+| `gooxi_uptime_seconds{host}` | System uptime from the BMC POH counter |
 
 ## Configuration File
 
@@ -220,7 +247,9 @@ curl -X POST http://localhost:9108/-/reload
 |------|---------|-------------|
 | `--config.file` | — | Path to the YAML config file |
 | `--listen` | `:9108` | Listen address |
-| `--web.path` | `/metrics` | Metrics endpoint path |
+| `--web.path` | `/metrics` | Metrics endpoint path (category endpoints are `<path>/sensors` and `<path>/health`) |
+| `--timeout` | `20s` | Timeout for a single BMC scrape |
+| `--log.level` | `info` | Log level: debug, info, warn, error |
 | `--version` | — | Print version and exit |
 
 ## How It Works
@@ -230,7 +259,8 @@ curl -X POST http://localhost:9108/-/reload
 3. Logs in to the BMC: `POST /api/session` (form-encoded) → gets the `QSESSIONID` cookie + `CSRFToken`.
 4. Fetches `/api/sensors`, `/api/chassis-status`, `/api/status/uptime` with the cookie and the `X-CSRFTOKEN` header.
 5. On `401` — re-logs in and retries.
-6. Emits the metrics.
+6. Emits the metrics (only if every request succeeded — a failed scrape returns `gooxi_up 0` and no partial data).
+7. Closes the BMC session: `DELETE /api/session`.
 
 Each scrape is independent: a fresh BMC client is created per scrape, and sessions are never shared between targets.
 
