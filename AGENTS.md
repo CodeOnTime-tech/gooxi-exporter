@@ -83,6 +83,13 @@ Sensor types: `temperature`, `voltage`, `fan`, `power_supply`, `power_unit`, `cu
 - **TLS**: `insecure: true` in config (BMCs use self-signed certs)
 - **Config**: YAML, validated on load, hot-reloadable via SIGHUP or `POST /-/reload`
 
+## Grafana Dashboard
+
+- **Live URL**: https://grafana.codeontime.ru/d/addstmn/gooxi-bmc
+- **Folder UID**: `addstmn`
+- **Dashboard UID**: `gooxi-bmc`
+- After any change to `grafana/gooxi.jsonnet` → regenerate JSON (`npm run dashboards`) → **always push the updated dashboard to the live Grafana instance** (folder `addstmn`, UID `gooxi-bmc`).
+
 ## Commands
 
 ```bash
@@ -90,6 +97,7 @@ go build -o gooxi-exporter .    # build
 go vet ./...                     # static analysis
 go test ./...                    # tests
 gofmt -w .                       # formatting
+npm run dashboards               # generate + validate + test Grafana dashboard JSON
 ```
 
 ## Rules

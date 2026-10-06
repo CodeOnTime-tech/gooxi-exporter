@@ -216,6 +216,9 @@ local bargaugeViz(
   overrides=[],
   limit=24,
   valueMode='color',
+  orientation='horizontal',
+  min=null,
+  max=null,
 ) = {
   group: 'bargauge',
   kind: 'VizConfig',
@@ -229,7 +232,7 @@ local bargaugeViz(
           steps: steps,
         },
         unit: unit,
-      },
+      } + axisBounds(min, max),
       overrides: overrides,
     },
     options: {
@@ -237,7 +240,7 @@ local bargaugeViz(
       limit: limit,
       minVizHeight: 10,
       minVizWidth: 0,
-      orientation: 'horizontal',
+      orientation: orientation,
       reduceOptions: {
         calcs: ['lastNotNull'],
         fields: '',
@@ -245,6 +248,39 @@ local bargaugeViz(
       },
       showUnfilled: true,
       valueMode: valueMode,
+    },
+  },
+  version: '13.1.0',
+};
+
+local gaugeViz(
+  unit='short',
+  min=0,
+  max=100,
+  steps=[{ color: 'green', value: 0 }, { color: 'yellow', value: 50 }, { color: 'red', value: 80 }],
+) = {
+  group: 'gauge',
+  kind: 'VizConfig',
+  spec: {
+    fieldConfig: {
+      defaults: {
+        color: { mode: 'thresholds' },
+        mappings: [],
+        min: min,
+        max: max,
+        thresholds: {
+          mode: 'absolute',
+          steps: steps,
+        },
+        unit: unit,
+      },
+      overrides: [],
+    },
+    options: {
+      calculate: { reduce: 'lastNotNull' },
+      orientation: 'horizontal',
+      showValue: true,
+      valueMode: 'last',
     },
   },
   version: '13.1.0',
@@ -477,19 +513,21 @@ local chassisPowerOverTimePanel = mkPanel(
 
 local uptimePanel = mkPanel(
   13,
-  'Uptime',
-  'System uptime from the BMC POH counter. A reset to zero means the machine was powered cycled.',
+  'Power-On Hours (Lifetime)',
+  'BMC POH counter — total cumulative time powered on since factory shipment, NOT uptime since last reboot.',
   queryGroup([
     panelQuery('gooxi_uptime_seconds{' + hostFilter + '}', '{{host}}', false, 'A'),
   ]),
-  timeseriesViz('s', min=0),
+  timeseriesViz('s'),
 );
 
 // ---------------------------------------------------------------------------
 // Sensors (one panel per sensor type)
 // ---------------------------------------------------------------------------
 
-local sensorPanel(id, title, description, typeExpr, unit) =
+// min/max default to null so the y-axis auto-scales to the data range
+// (e.g. temperature floor follows the lowest real reading, not a hardcoded 0).
+local sensorPanel(id, title, description, typeExpr, unit, min=null, max=null) =
   mkPanel(
     id,
     title,
@@ -502,7 +540,7 @@ local sensorPanel(id, title, description, typeExpr, unit) =
         'A',
       ),
     ]),
-    timeseriesViz(unit, min=0, legendSortBy='name', legendCalcs=['last', 'max']),
+    timeseriesViz(unit, min=min, max=max, legendSortBy='name', legendCalcs=['last', 'max']),
   );
 
 local temperaturePanel = sensorPanel(
@@ -521,20 +559,86 @@ local voltagePanel = sensorPanel(
   'volt',
 );
 
-local fanPanel = sensorPanel(
+local fanPanel = mkPanel(
   22,
   'Fan Speed',
-  'Cooling fan speeds in RPM. A flat-zero line means a stopped fan; spikes mean thermal load.',
-  '"fan"',
-  'rpm',
+  'Cooling fan speeds. 0 = stopped/absent fan.',
+  queryGroup([
+    panelQuery(
+      'gooxi_sensor_value{' + hostFilter + ',' + sensorFilter + ',type="fan"}',
+      '{{host}} / {{name}}',
+      false,
+      'A',
+    ),
+  ]),
+  bargaugeViz(
+    unit='rpm',
+    steps=[
+      { color: 'green', value: 0 },
+      { color: 'yellow', value: 5000 },
+      { color: 'red', value: 8000 },
+    ],
+    limit=24,
+    orientation='vertical',
+    max=10000,
+  ),
 );
 
-local powerSupplyPanel = sensorPanel(
+local powerSupplyPanel = mkPanel(
   23,
   'Power Supply',
-  'Power supply and power unit readings (input/output power) in watts.',
-  '~"power_supply|power_unit"',
-  'watt',
+  'PSU input power (PIN) in watts. Only sensors with unit=watts are shown; status registers excluded.',
+  queryGroup([
+    panelQuery(
+      'gooxi_sensor_value{' + hostFilter + ',' + sensorFilter + ',type=~"power_supply|power_unit",unit="watts"}',
+      '{{host}} / {{name}}',
+      false,
+      'A',
+    ),
+  ]),
+  bargaugeViz(
+    unit='watt',
+    steps=[
+      { color: 'green', value: 0 },
+      { color: 'yellow', value: 300 },
+      { color: 'red', value: 400 },
+    ],
+    limit=10,
+    orientation='vertical',
+    max=500,
+  ),
+);
+
+// Fan speed dynamics over time — complements the bargauge snapshot above.
+local fanTrendPanel = mkPanel(
+  28,
+  'Fan Speed (Trend)',
+  'Fan speeds over time. Watch for ramps as thermal load changes and for a fan pinned at max.',
+  queryGroup([
+    panelQuery(
+      'gooxi_sensor_value{' + hostFilter + ',' + sensorFilter + ',type="fan"}',
+      '{{host}} / {{name}}',
+      false,
+      'A',
+    ),
+  ]),
+  timeseriesViz('rpm', legendSortBy='name', legendCalcs=['last', 'max']),
+);
+
+// Power consumption dynamics over time — complements the PSU bargauge snapshot above.
+local powerTrendPanel = mkPanel(
+  29,
+  'Power Consumption (Trend)',
+  'PSU input power (PIN) over time in watts. Tracks electrical draw as the load changes.',
+  queryGroup([
+    panelQuery(
+      'gooxi_sensor_value{' + hostFilter + ',' + sensorFilter + ',type=~"power_supply|power_unit",unit="watts"}',
+      '{{host}} / {{name}}',
+      false,
+      'A',
+    ),
+  ]),
+  timeseriesViz('watt', legendSortBy='name', legendCalcs=['last', 'max']),
 );
 
 local currentPanel = sensorPanel(
@@ -551,6 +655,8 @@ local processorPanel = sensorPanel(
   'Processor utilization and related CPU sensors reported by the BMC.',
   '"processor"',
   'percent',
+  0,
+  100,
 );
 
 local coolingDevicePanel = sensorPanel(
@@ -561,12 +667,32 @@ local coolingDevicePanel = sensorPanel(
   'short',
 );
 
-local physicalSecurityPanel = sensorPanel(
+// Binary flag: 0 = secure, 1 = intrusion event. No intermediate values exist,
+// so pin the axis to 0..1 and step the line (same treatment as reachability).
+local physicalSecurityPanel = mkPanel(
   27,
   'Physical Security',
-  'Physical security intrusion sensors (e.g. chassis intrusion flag). Non-zero means an event.',
-  '"physical_security"',
-  'none',
+  'Physical security intrusion sensors (e.g. chassis intrusion flag). 0 = secure, 1 = intrusion event.',
+  queryGroup([
+    panelQuery(
+      'gooxi_sensor_value{' + hostFilter + ',' + sensorFilter + ',type="physical_security"}',
+      '{{host}} / {{name}}',
+      false,
+      'A',
+    ),
+  ]),
+  timeseriesViz(
+    'none',
+    min=0,
+    max=1,
+    steps=[
+      { color: 'green', value: 0 },
+      { color: 'red', value: 1 },
+    ],
+    thresholdsStyle={ mode: 'line' },
+    stepped=true,
+    legendSortBy='name',
+  ),
 );
 
 // ---------------------------------------------------------------------------
@@ -650,6 +776,8 @@ local panels =
   + voltagePanel
   + fanPanel
   + powerSupplyPanel
+  + fanTrendPanel
+  + powerTrendPanel
   + currentPanel
   + processorPanel
   + coolingDevicePanel
@@ -719,11 +847,13 @@ local panels =
         layoutItem(25, 12, 41, 12, 8), // Processor
         layoutItem(26, 0, 49, 12, 8),  // Cooling Device
         layoutItem(27, 12, 49, 12, 8), // Physical Security
+        layoutItem(28, 0, 57, 12, 8),  // Fan Speed (Trend)
+        layoutItem(29, 12, 57, 12, 8), // Power Consumption (Trend)
 
         // === Sensor States ===
-        layoutItem(103, 0, 57, 24, 2),
-        layoutItem(30, 0, 59, 12, 8),  // Non-Normal Sensors
-        layoutItem(31, 12, 59, 12, 8), // Worst Sensor State per Host
+        layoutItem(103, 0, 65, 24, 2),
+        layoutItem(30, 0, 67, 12, 8),  // Non-Normal Sensors
+        layoutItem(31, 12, 67, 12, 8), // Worst Sensor State per Host
       ],
     },
   },
@@ -735,7 +865,7 @@ local panels =
     autoRefresh: 'auto',
     autoRefreshIntervals: ['5s', '10s', '30s', '1m', '5m', '15m', '30m', '1h', '2h', '1d'],
     fiscalYearStartMonth: 0,
-    from: 'now-6h',
+    from: 'now-30m',
     hideTimepicker: false,
     timezone: 'browser',
     to: 'now',

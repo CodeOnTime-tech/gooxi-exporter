@@ -675,10 +675,10 @@
             "transformations": []
           }
         },
-        "description": "System uptime from the BMC POH counter. A reset to zero means the machine was powered cycled.",
+        "description": "BMC POH counter — total cumulative time powered on since factory shipment, NOT uptime since last reboot.",
         "id": 13,
         "links": [],
-        "title": "Uptime",
+        "title": "Power-On Hours (Lifetime)",
         "vizConfig": {
           "group": "timeseries",
           "kind": "VizConfig",
@@ -723,7 +723,6 @@
                   }
                 },
                 "mappings": [],
-                "min": 0,
                 "thresholds": {
                   "mode": "absolute",
                   "steps": [
@@ -937,7 +936,6 @@
                   }
                 },
                 "mappings": [],
-                "min": 0,
                 "thresholds": {
                   "mode": "absolute",
                   "steps": [
@@ -1064,7 +1062,6 @@
                   }
                 },
                 "mappings": [],
-                "min": 0,
                 "thresholds": {
                   "mode": "absolute",
                   "steps": [
@@ -1143,55 +1140,21 @@
             "transformations": []
           }
         },
-        "description": "Cooling fan speeds in RPM. A flat-zero line means a stopped fan; spikes mean thermal load.",
+        "description": "Cooling fan speeds. 0 = stopped/absent fan.",
         "id": 22,
         "links": [],
         "title": "Fan Speed",
         "vizConfig": {
-          "group": "timeseries",
+          "group": "bargauge",
           "kind": "VizConfig",
           "spec": {
             "fieldConfig": {
               "defaults": {
                 "color": {
-                  "mode": "palette-classic"
-                },
-                "custom": {
-                  "axisBorderShow": false,
-                  "axisCenteredZero": false,
-                  "axisColorMode": "text",
-                  "axisLabel": "",
-                  "axisPlacement": "auto",
-                  "barAlignment": 0,
-                  "barWidthFactor": 0.6,
-                  "drawStyle": "line",
-                  "fillOpacity": 0,
-                  "gradientMode": "none",
-                  "hideFrom": {
-                    "legend": false,
-                    "tooltip": false,
-                    "viz": false
-                  },
-                  "insertNulls": false,
-                  "lineInterpolation": "linear",
-                  "lineWidth": 1,
-                  "pointSize": 5,
-                  "scaleDistribution": {
-                    "type": "linear"
-                  },
-                  "showPoints": "never",
-                  "showValues": false,
-                  "spanNulls": false,
-                  "stacking": {
-                    "group": "A",
-                    "mode": "none"
-                  },
-                  "thresholdsStyle": {
-                    "mode": "off"
-                  }
+                  "mode": "continuous-GrYlRd"
                 },
                 "mappings": [],
-                "min": 0,
+                "max": 10000,
                 "thresholds": {
                   "mode": "absolute",
                   "steps": [
@@ -1200,8 +1163,12 @@
                       "value": 0
                     },
                     {
+                      "color": "yellow",
+                      "value": 5000
+                    },
+                    {
                       "color": "red",
-                      "value": 80
+                      "value": 8000
                     }
                   ]
                 },
@@ -1210,24 +1177,20 @@
               "overrides": []
             },
             "options": {
-              "legend": {
+              "displayMode": "gradient",
+              "limit": 24,
+              "minVizHeight": 10,
+              "minVizWidth": 0,
+              "orientation": "vertical",
+              "reduceOptions": {
                 "calcs": [
-                  "last",
-                  "max"
+                  "lastNotNull"
                 ],
-                "displayMode": "table",
-                "enableFacetedFilter": false,
-                "overflow": "ellipsis",
-                "placement": "bottom",
-                "showLegend": true,
-                "sortBy": "name",
-                "sortDesc": false
+                "fields": "",
+                "values": false
               },
-              "tooltip": {
-                "hideZeros": false,
-                "mode": "single",
-                "sort": "desc"
-              }
+              "showUnfilled": true,
+              "valueMode": "color"
             }
           },
           "version": "13.1.0"
@@ -1254,7 +1217,7 @@
                     "spec": {
                       "editorMode": "code",
                       "exemplar": true,
-                      "expr": "gooxi_sensor_value{host=~\"$host\",name=~\"$sensor\",type=~\"power_supply|power_unit\"}",
+                      "expr": "gooxi_sensor_value{host=~\"$host\",name=~\"$sensor\",type=~\"power_supply|power_unit\",unit=\"watts\"}",
                       "instant": false,
                       "interval": "",
                       "legendFormat": "{{host}} / {{name}}",
@@ -1270,55 +1233,21 @@
             "transformations": []
           }
         },
-        "description": "Power supply and power unit readings (input/output power) in watts.",
+        "description": "PSU input power (PIN) in watts. Only sensors with unit=watts are shown; status registers excluded.",
         "id": 23,
         "links": [],
         "title": "Power Supply",
         "vizConfig": {
-          "group": "timeseries",
+          "group": "bargauge",
           "kind": "VizConfig",
           "spec": {
             "fieldConfig": {
               "defaults": {
                 "color": {
-                  "mode": "palette-classic"
-                },
-                "custom": {
-                  "axisBorderShow": false,
-                  "axisCenteredZero": false,
-                  "axisColorMode": "text",
-                  "axisLabel": "",
-                  "axisPlacement": "auto",
-                  "barAlignment": 0,
-                  "barWidthFactor": 0.6,
-                  "drawStyle": "line",
-                  "fillOpacity": 0,
-                  "gradientMode": "none",
-                  "hideFrom": {
-                    "legend": false,
-                    "tooltip": false,
-                    "viz": false
-                  },
-                  "insertNulls": false,
-                  "lineInterpolation": "linear",
-                  "lineWidth": 1,
-                  "pointSize": 5,
-                  "scaleDistribution": {
-                    "type": "linear"
-                  },
-                  "showPoints": "never",
-                  "showValues": false,
-                  "spanNulls": false,
-                  "stacking": {
-                    "group": "A",
-                    "mode": "none"
-                  },
-                  "thresholdsStyle": {
-                    "mode": "off"
-                  }
+                  "mode": "continuous-GrYlRd"
                 },
                 "mappings": [],
-                "min": 0,
+                "max": 500,
                 "thresholds": {
                   "mode": "absolute",
                   "steps": [
@@ -1327,8 +1256,12 @@
                       "value": 0
                     },
                     {
+                      "color": "yellow",
+                      "value": 300
+                    },
+                    {
                       "color": "red",
-                      "value": 80
+                      "value": 400
                     }
                   ]
                 },
@@ -1337,24 +1270,20 @@
               "overrides": []
             },
             "options": {
-              "legend": {
+              "displayMode": "gradient",
+              "limit": 10,
+              "minVizHeight": 10,
+              "minVizWidth": 0,
+              "orientation": "vertical",
+              "reduceOptions": {
                 "calcs": [
-                  "last",
-                  "max"
+                  "lastNotNull"
                 ],
-                "displayMode": "table",
-                "enableFacetedFilter": false,
-                "overflow": "ellipsis",
-                "placement": "bottom",
-                "showLegend": true,
-                "sortBy": "name",
-                "sortDesc": false
+                "fields": "",
+                "values": false
               },
-              "tooltip": {
-                "hideZeros": false,
-                "mode": "single",
-                "sort": "desc"
-              }
+              "showUnfilled": true,
+              "valueMode": "color"
             }
           },
           "version": "13.1.0"
@@ -1445,7 +1374,6 @@
                   }
                 },
                 "mappings": [],
-                "min": 0,
                 "thresholds": {
                   "mode": "absolute",
                   "steps": [
@@ -1572,6 +1500,7 @@
                   }
                 },
                 "mappings": [],
+                "max": 100,
                 "min": 0,
                 "thresholds": {
                   "mode": "absolute",
@@ -1699,7 +1628,6 @@
                   }
                 },
                 "mappings": [],
-                "min": 0,
                 "thresholds": {
                   "mode": "absolute",
                   "steps": [
@@ -1778,10 +1706,138 @@
             "transformations": []
           }
         },
-        "description": "Physical security intrusion sensors (e.g. chassis intrusion flag). Non-zero means an event.",
+        "description": "Physical security intrusion sensors (e.g. chassis intrusion flag). 0 = secure, 1 = intrusion event.",
         "id": 27,
         "links": [],
         "title": "Physical Security",
+        "vizConfig": {
+          "group": "timeseries",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "stepAfter",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "line"
+                  }
+                },
+                "mappings": [],
+                "max": 1,
+                "min": 0,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                },
+                "unit": "none"
+              },
+              "overrides": []
+            },
+            "options": {
+              "legend": {
+                "calcs": [
+                  "last",
+                  "max"
+                ],
+                "displayMode": "table",
+                "enableFacetedFilter": false,
+                "overflow": "ellipsis",
+                "placement": "bottom",
+                "showLegend": true,
+                "sortBy": "name",
+                "sortDesc": false
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "desc"
+              }
+            }
+          },
+          "version": "13.1.0"
+        }
+      }
+    },
+    "panel-28": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "group": "prometheus",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "gooxi_sensor_value{host=~\"$host\",name=~\"$sensor\",type=\"fan\"}",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "{{host}} / {{name}}",
+                      "range": true
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "A"
+                }
+              }
+            ],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Fan speeds over time. Watch for ramps as thermal load changes and for a fan pinned at max.",
+        "id": 28,
+        "links": [],
+        "title": "Fan Speed (Trend)",
         "vizConfig": {
           "group": "timeseries",
           "kind": "VizConfig",
@@ -1826,7 +1882,6 @@
                   }
                 },
                 "mappings": [],
-                "min": 0,
                 "thresholds": {
                   "mode": "absolute",
                   "steps": [
@@ -1840,7 +1895,133 @@
                     }
                   ]
                 },
-                "unit": "none"
+                "unit": "rpm"
+              },
+              "overrides": []
+            },
+            "options": {
+              "legend": {
+                "calcs": [
+                  "last",
+                  "max"
+                ],
+                "displayMode": "table",
+                "enableFacetedFilter": false,
+                "overflow": "ellipsis",
+                "placement": "bottom",
+                "showLegend": true,
+                "sortBy": "name",
+                "sortDesc": false
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "desc"
+              }
+            }
+          },
+          "version": "13.1.0"
+        }
+      }
+    },
+    "panel-29": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": {
+                      "name": "${DS_PROMETHEUS}"
+                    },
+                    "group": "prometheus",
+                    "kind": "DataQuery",
+                    "spec": {
+                      "editorMode": "code",
+                      "exemplar": true,
+                      "expr": "gooxi_sensor_value{host=~\"$host\",name=~\"$sensor\",type=~\"power_supply|power_unit\",unit=\"watts\"}",
+                      "instant": false,
+                      "interval": "",
+                      "legendFormat": "{{host}} / {{name}}",
+                      "range": true
+                    },
+                    "version": "v0"
+                  },
+                  "refId": "A"
+                }
+              }
+            ],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "PSU input power (PIN) over time in watts. Tracks electrical draw as the load changes.",
+        "id": 29,
+        "links": [],
+        "title": "Power Consumption (Trend)",
+        "vizConfig": {
+          "group": "timeseries",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 0,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "showValues": false,
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                },
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "red",
+                      "value": 80
+                    }
+                  ]
+                },
+                "unit": "watt"
               },
               "overrides": []
             },
@@ -2730,12 +2911,38 @@
           "spec": {
             "element": {
               "kind": "ElementReference",
+              "name": "panel-28"
+            },
+            "height": 8,
+            "width": 12,
+            "x": 0,
+            "y": 57
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "element": {
+              "kind": "ElementReference",
+              "name": "panel-29"
+            },
+            "height": 8,
+            "width": 12,
+            "x": 12,
+            "y": 57
+          }
+        },
+        {
+          "kind": "GridLayoutItem",
+          "spec": {
+            "element": {
+              "kind": "ElementReference",
               "name": "panel-103"
             },
             "height": 2,
             "width": 24,
             "x": 0,
-            "y": 57
+            "y": 65
           }
         },
         {
@@ -2748,7 +2955,7 @@
             "height": 8,
             "width": 12,
             "x": 0,
-            "y": 59
+            "y": 67
           }
         },
         {
@@ -2761,7 +2968,7 @@
             "height": 8,
             "width": 12,
             "x": 12,
-            "y": 59
+            "y": 67
           }
         }
       ]
@@ -2890,5 +3097,5 @@
       }
     }
   ],
-  "version": 1
+  "version": 6
 }
