@@ -145,6 +145,7 @@ type uptimeResponse struct {
 
 type gooxiCollector struct {
 	target string
+	module string
 	config *SafeConfig
 
 	descUp             *prometheus.Desc
@@ -155,9 +156,10 @@ type gooxiCollector struct {
 	descUptime         *prometheus.Desc
 }
 
-func newGooxiCollector(target string, config *SafeConfig) *gooxiCollector {
+func newGooxiCollector(target, module string, config *SafeConfig) *gooxiCollector {
 	return &gooxiCollector{
 		target: target,
+		module: module,
 		config: config,
 		descUp: prometheus.NewDesc(
 			"gooxi_up",
@@ -213,7 +215,7 @@ func (c *gooxiCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 	}()
 
-	mod := c.config.ModuleFor("default")
+	mod := c.config.ModuleFor(c.module)
 	baseURL := fmt.Sprintf("https://%s", c.target)
 	bmc := newBMCClient(baseURL, mod.Username, mod.Password, mod.Insecure)
 

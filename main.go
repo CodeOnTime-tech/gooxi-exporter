@@ -95,7 +95,7 @@ func remoteHandler(w http.ResponseWriter, r *http.Request) {
 	logger.Debug("scrape", "target", target, "module", module)
 
 	registry := prometheus.NewRegistry()
-	collector := newGooxiCollector(target, sc)
+	collector := newGooxiCollector(target, module, sc)
 	registry.MustRegister(collector)
 
 	promhttp.HandlerFor(registry, promhttp.HandlerOpts{}).ServeHTTP(w, r)
