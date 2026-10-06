@@ -41,3 +41,6 @@ build/
 
 # Logs
 *.log
+
+# Kilo
+.kilo/plans
